@@ -1,0 +1,11 @@
+litellm>=1.63.0
+tenacity>=8.2          # required by litellm's num_retries path; not pulled in by litellm itself
+pydantic>=2.7
+pyyaml>=6.0
+python-dotenv>=1.0     # explicit .env loading; see summarizer/config.py
+pypdf>=4.2
+
+# optional OCR path (only needed for scanned PDFs; also needs tesseract + poppler on PATH)
+pytesseract>=0.3.10
+pdf2image>=1.17
+Pillow>=10.0

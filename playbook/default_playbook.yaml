@@ -1,0 +1,74 @@
+name: Standard vendor-side MSA playbook
+version: "1.0"
+party: "the Supplier"
+
+rules:
+  - id: LIAB-01
+    title: Liability cap
+    rule: >
+      Aggregate liability must be capped at no more than 12 months of fees paid
+      under the agreement.
+    fallback: >
+      An uncapped carve-out is acceptable only for the indemnity at IP-01 and for
+      wilful misconduct.
+    severity: high
+    preferred_language: >
+      "Each party's total aggregate liability arising out of or related to this
+      Agreement shall not exceed the total fees paid in the twelve (12) months
+      preceding the claim."
+
+  - id: LIAB-02
+    title: Consequential damages waiver
+    rule: Neither party is liable for indirect, incidental or consequential damages.
+    severity: high
+
+  - id: IP-01
+    title: IP indemnity
+    rule: >
+      Supplier indemnifies Customer against third-party IP infringement claims,
+      subject to the cap at LIAB-01 unless expressly carved out.
+    severity: medium
+
+  - id: TERM-01
+    title: Termination for convenience
+    rule: Either party may terminate for convenience on no less than 30 days' written notice.
+    fallback: 60 days is acceptable; anything longer, or one-sided rights, is a deviation.
+    severity: medium
+
+  - id: PAY-01
+    title: Payment terms
+    rule: Invoices are payable within 30 days (net 30). Longer than net 60 is a deviation.
+    severity: medium
+
+  - id: DATA-01
+    title: Data protection
+    rule: >
+      A data processing addendum must be incorporated where personal data is
+      processed, with breach notification within 72 hours.
+    severity: high
+
+  - id: CONF-01
+    title: Confidentiality term
+    rule: >
+      Confidentiality obligations survive for 3-5 years after termination;
+      perpetual obligations are a deviation except for trade secrets.
+    severity: low
+
+  - id: LAW-01
+    title: Governing law and venue
+    rule: Governing law must be England & Wales, Delaware, or New York.
+    severity: medium
+
+  - id: ASSIGN-01
+    title: Assignment
+    rule: >
+      Assignment requires prior written consent, except to an affiliate or in
+      connection with a merger or sale of substantially all assets.
+    severity: low
+
+  - id: AUTO-01
+    title: Auto-renewal
+    rule: >
+      Automatic renewal is acceptable only with at least 30 days' notice of
+      non-renewal and no more than a 12-month renewal term.
+    severity: medium

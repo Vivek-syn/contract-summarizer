@@ -1,0 +1,141 @@
+name: Employment offer letter playbook (employer side, India)
+version: "1.0"
+party: "the Employer"
+# Written from the employer's perspective - i.e. reviewing an offer letter you are
+# issuing. To review one you have been GIVEN, flip `party` to "the Employee" and
+# read each severity as risk to the candidate instead.
+
+rules:
+  - id: COMP-01
+    title: Compensation is fully specified
+    rule: >
+      The letter states gross annual compensation with a breakdown of fixed pay
+      and any variable component, and names the currency and payment frequency.
+    fallback: A CTC total with a referenced annexure is acceptable if the annexure is named.
+    severity: high
+
+  - id: COMP-02
+    title: Variable pay conditions are defined
+    rule: >
+      Any bonus, incentive or variable component states how it is earned, when it
+      is paid, and whether it is pro-rated or forfeited on exit.
+    fallback: >
+      "At the discretion of management" is acceptable only if the letter says so
+      explicitly rather than leaving the basis unstated.
+    severity: medium
+
+  - id: ROLE-01
+    title: Role, reporting line and location
+    rule: >
+      Designation, reporting manager or function, work location, and whether the
+      role is remote, hybrid or on-site are all stated.
+    severity: medium
+
+  - id: START-01
+    title: Joining date and offer validity
+    rule: >
+      The letter states a joining date and a date by which the offer must be
+      accepted, and what happens if the candidate does not join by then.
+    severity: medium
+
+  - id: PROB-01
+    title: Probation period
+    rule: >
+      Probation is no longer than 6 months, states the notice period applicable
+      during probation, and states how confirmation is communicated.
+    fallback: Up to 12 months is a deviation but not blocking if confirmation criteria are stated.
+    severity: medium
+
+  - id: NOTICE-01
+    title: Notice period is reciprocal and reasonable
+    rule: >
+      The notice period is stated, is no longer than 90 days, and is the same for
+      both parties, or the asymmetry is explicitly justified.
+    fallback: >
+      A longer employer notice than employee notice is acceptable; the reverse
+      (employee must give more notice than the employer) is a deviation.
+    severity: high
+
+  - id: NOTICE-02
+    title: Buyout and garden leave
+    rule: >
+      If notice can be bought out, the letter states the amount and who may elect it.
+      Garden leave, if any, states that salary continues during it.
+    severity: low
+
+  - id: TERM-01
+    title: Termination grounds
+    rule: >
+      Grounds for termination with and without cause are stated, and termination
+      for cause is limited to defined conduct rather than sole discretion.
+    severity: high
+
+  - id: BOND-01
+    title: Service bond or training bond
+    rule: >
+      No service bond, minimum-tenure commitment, or recovery of training cost.
+      Indian courts routinely refuse to enforce bonds that are penalties rather
+      than a genuine pre-estimate of loss, so a bond is both a legal and a
+      reputational risk.
+    fallback: >
+      A bond tied to a documented, reimbursed training cost, capped at that cost
+      and tapering over time, is a deviation rather than a blocker.
+    severity: high
+
+  - id: NONCOMP-01
+    title: Non-compete scope
+    rule: >
+      Any post-termination non-compete is limited in duration, geography and
+      scope of activity. Note that post-employment non-competes are generally
+      void under s.27 of the Indian Contract Act.
+    fallback: >
+      Non-solicitation of clients and employees for up to 12 months is the
+      enforceable alternative and is acceptable.
+    severity: high
+
+  - id: IP-01
+    title: IP assignment
+    rule: >
+      Work product created in the course of employment is assigned to the
+      employer, with a carve-out for pre-existing personal IP and for work
+      created wholly outside working hours without company resources.
+    fallback: A blanket assignment with no carve-out is a deviation.
+    severity: high
+
+  - id: CONF-01
+    title: Confidentiality
+    rule: >
+      Confidentiality obligations are defined, survive termination, and carve out
+      information that is public, independently developed, or lawfully obtained.
+    fallback: A perpetual obligation is acceptable for trade secrets.
+    severity: medium
+
+  - id: MOON-01
+    title: Exclusivity and moonlighting
+    rule: >
+      Any exclusivity or outside-employment restriction is limited to activity
+      that competes with or materially conflicts with the role, rather than
+      barring all outside work including unpaid or open-source contribution.
+    severity: low
+
+  - id: STAT-01
+    title: Statutory benefits
+    rule: >
+      Provident Fund, gratuity, statutory leave and any insurance are referenced,
+      or the letter points to a policy document that covers them.
+    severity: medium
+
+  - id: LAW-01
+    title: Governing law and dispute resolution
+    rule: >
+      Governing law and the courts or arbitral forum are named, and the venue is
+      a place the employee can realistically reach.
+    severity: low
+
+  - id: BGV-01
+    title: Conditions precedent
+    rule: >
+      Any condition the offer depends on - background verification, document
+      submission, relieving letter from a prior employer, medical clearance - is
+      stated, along with the consequence of failing it.
+    severity: medium
