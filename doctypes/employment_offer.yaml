@@ -1,0 +1,36 @@
+slug: employment_offer
+name: Employment offer letter
+hints: >
+  Addressed to a named individual, offers a role with a designation and
+  compensation, asks them to sign and return by a date. Not a commercial
+  agreement between companies.
+
+# Drives analysis emphasis.
+focus:
+  - Compensation and variable pay
+  - Probation and confirmation
+  - Notice period and buyout
+  - Service bond or minimum tenure
+  - Non-compete and non-solicitation
+  - IP assignment
+  - Confidentiality
+  - Statutory benefits
+  - Conditions precedent
+
+# Drives segmentation. Returned headings are validated against this list.
+sections:
+  - Role & Start
+  - Compensation
+  - Term & Notice
+  - Restrictive Covenants
+  - Statutory & Benefits
+  - Conditions & Other
+
+
+# Drives the review packet's sign-off checklist.
+review_checklist:
+  - Salary, joining date and designation checked against the letter
+  - Notice period and any bond terms read in full
+  - Restrictive covenants reviewed for enforceability
+  - Unverified quotes resolved
+  - Findings accepted or overridden

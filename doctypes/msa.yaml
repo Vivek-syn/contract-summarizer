@@ -1,0 +1,31 @@
+slug: msa
+name: Master services agreement
+hints: >
+  A commercial agreement between two companies governing services delivered
+  under statements of work. Usually has liability, indemnity and IP sections.
+
+focus:
+  - Limitation of liability
+  - Indemnities
+  - Termination rights
+  - Payment terms
+  - Data protection
+  - Intellectual property
+  - Confidentiality
+  - Governing law
+
+sections:
+  - Parties & Term
+  - Commercials
+  - Liability & Indemnity
+  - IP & Data
+  - Termination
+  - Other
+
+
+review_checklist:
+  - Parties, dates and amounts checked against the document
+  - Every high-risk clause read in full
+  - Liability cap and indemnity carve-outs confirmed
+  - Unverified quotes resolved
+  - Findings accepted or overridden

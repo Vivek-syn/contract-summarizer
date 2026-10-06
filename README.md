@@ -1,140 +1,198 @@
-# Agentic contract summarizer — LiteLLM → Anthropic
+# Contract IDP
 
-An implementation of the whiteboard pipeline: parse a contract, extract clauses with
-verbatim grounding, produce a structured summary, validate it against a playbook with
-a tool-driven agent, gate it behind an LLM judge, and hand a packet to a human.
+FastAPI backend for document understanding: OCR, clause analysis, grounding,
+type-aware segmentation and playbook validation.
 
-```
- User Doc
-    │
- PDF parser / OCR ──────────── whole-doc fallback (PDF → Claude directly)
-    │  text (extracted, preferred)
- chunk + BM25 index  ← the RAG box
-    │
-    ├──► extract_clauses ──► grounding verifier (deterministic, no LLM)
-    │         Grounding arm         │ every quote located in the source, or flagged
-    │                               ▼
-    ├──► segment_summary ◄──────────┘
-    │         Segmentation arm → StructuredSummary
-    │
- validate (agentic: search_document / search_playbook / get_clause / record_finding)
-    │         → ValidationReport against playbook + rulebook
-    │
- judge ──── revise? ──► re-run every stage with the judge's fix instructions (bounded)
-    │
- accept
-    │
- human validation packet (Markdown, with unverified quotes flagged)
-```
+Architecture doc: [Contract IDP Pipeline Architecture](https://claude.ai/artifact/MxdwzmB8EybR4sDL9yiH6j)
 
 ## Run it
 
 ```bash
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
-python run.py samples/sample_msa.txt --playbook playbook/default_playbook.yaml -v
+pip install -r requirements.txt          # add -azure or -aws for those providers
+cp .env.example .env                     # set OCR_AZURE_* and ANTHROPIC_API_KEY
+alembic upgrade head                     # create the validation_rules table
+python -m scripts.seed_rules             # import the legacy YAML playbooks, once
+uvicorn main:app --reload
 ```
 
-Outputs `out/<name>.review.md` (the human packet) and `out/<name>.result.json`
-(the full typed result). Exit code is `1` when the playbook fails or the judge
-still wants revisions — so it drops into CI as a gate.
+SQLite by default, so no database server is needed. Point `DB_URL` at
+`postgresql+asyncpg://...` for a deployment.
 
-Two tests run with no API key and no network:
+`http://localhost:8000/docs` for the OpenAPI UI, `/api/v1/health` for provider status.
+
+Offline tests — no API key, no cloud account, no network:
 
 ```bash
-python smoke_test.py   # ingest, retrieval, playbook, grounding, packet rendering
-python mock_test.py    # full orchestration against a stubbed transport
+python backend_test.py
 ```
 
-## Layout
+## The pipeline
 
-| File | Role |
-|---|---|
-| `summarizer/ingest.py` | PDF text layer → OCR → whole-doc fallback; page-addressable text |
-| `summarizer/retrieval.py` | Dependency-free BM25 index over document chunks and playbook rules |
-| `summarizer/llm.py` | LiteLLM layer: `structured()`, `agent_loop()`, cost meter, param degradation |
-| `summarizer/agents.py` | The four model stages and their system prompts |
-| `summarizer/grounding.py` | Deterministic quote verification (exact → fuzzy → missing) |
-| `summarizer/playbook.py` | YAML rulebook → checklist + retrievable chunks |
-| `summarizer/pipeline.py` | Orchestration, judge retry loop, review-packet rendering |
-| `summarizer/schemas.py` | Pydantic contracts; also the JSON Schemas sent as tools |
+```
+PDF ─► preprocess ─► OCR ─┬─► type detection ─► analysis ─┬─► grounding
+       hash, split,       │   (pages 1-2,                 ├─► segmentation
+       quality scan       │    own call)                  └─► validation
+                          │                                   (rule-major)
+                          └── cached by content hash              │
+                                                                  ▼
+                                                            consolidate
+                                                         result.json + review.md
+```
 
-## Design notes
-
-**Grounding is not an LLM call.** `grounding.py` locates every quoted span in the
-source text by exact match, then fuzzy match. A span it cannot find is marked
-`missing`, surfaced to the judge, and printed with `!!` in the review packet. This is
-the only part of the pipeline that cannot hallucinate, so it anchors everything else.
-
-**Structured output without forced tool use.** Anthropic rejects forced `tool_choice`
-alongside extended thinking, and the newest models reject it outright. So `structured()`
-uses `tool_choice="auto"` plus an explicit instruction naming the tool, then feeds any
-pydantic `ValidationError` back to the model as a repair turn. LiteLLM's Anthropic
-transform also drops the `strict` flag, so this repair loop — not the provider — is what
-guarantees a schema-valid object.
-
-**`output_config` is a top-level kwarg, not `extra_body`.** LiteLLM forwards unknown
-kwargs into the Anthropic request body, but forwards `extra_body` as a literal
-`extra_body` key, which Anthropic rejects. `complete()` also degrades gracefully: on a
-400 it strips one optional param at a time (`thinking`, `output_config`, `tool_choice`)
-and retries, so the code still runs against a proxy or an older model.
-
-**Adaptive thinking only.** `budget_tokens` is rejected on Opus 5; `config.py` never
-sets it. Depth is controlled by `SUMMARIZER_EFFORT` (`low`…`max`).
-
-**Provider switching needs no code change.** Point `SUMMARIZER_MODEL` at
-`openai/...` and set `OPENAI_API_KEY`; `run.py` derives the required env var from the
-model string via `litellm.validate_environment`. `llm.py` adapts the request per
-provider, because the cross-provider failures are quiet rather than loud:
-
-| | Anthropic | OpenAI |
+| Stage | Model? | Notes |
 |---|---|---|
-| Reasoning depth | `thinking: adaptive` + `output_config.effort` | `reasoning_effort` (`xhigh`/`max` → `high`) |
-| Output cap | `max_tokens` | `max_completion_tokens` (LiteLLM maps it) |
-| Tool `strict` | ignored by the provider | **stripped** — see below |
+| preprocess | no | hash, page split, quality flags. Flags never block |
+| ocr | no | Azure DI or Textract; cached by document content hash |
+| type detection | yes (fast) | reads pages 1-2 only; a closed enum + `unknown` |
+| analysis | yes | reads OCR **text**, never the PDF |
+| grounding | no | quote → char span → word boxes, one box per line |
+| segmentation | yes | section taxonomy comes from the doc-type config |
+| validation | yes | one call per rule, run in parallel |
+| consolidate | no | assembles JSON, renders the review packet |
 
-Two traps worth knowing if you extend this: `output_config` is *not* dropped for
-OpenAI (LiteLLM puts it in `extra_body`, which OpenAI rejects), and `reasoning_effort`
-sent to Anthropic is rewritten to the deprecated `thinking: {type: "enabled",
-budget_tokens: N}`, which Opus 5 rejects. `strict` is stripped for OpenAI because its
-strict mode requires every property in `required`, and `Span.char_start` /
-`PlaybookFinding.suggested_redline` are genuinely optional.
+## Why it is shaped this way
 
-**The judge is a gate, not a rubber stamp.** Below `SUMMARIZER_JUDGE_THRESHOLD` the
-whole analysis re-runs with the judge's `fix_instruction`s injected into every stage's
-prompt, up to `SUMMARIZER_MAX_REPAIRS` times. `needs_human_review` is hardcoded `True` —
-the judge decides whether the packet is worth a human's time, never whether to skip them.
+**The model never sees the PDF.** OCR writes the text, the model writes the
+quotes, and grounding checks one against the other. When the model produced both,
+a hallucination landed in both halves consistently and the verifier confirmed it —
+a closed loop marking its own homework.
+
+**Type detection is its own stage.** It is a routing decision: wrong here and the
+segmentation schema and the playbook are both wrong, with nothing downstream able
+to tell. Isolated, it can be retried alone, cached, and overridden in one click.
+
+**Validation is rule-major, not page-wise.** A rule needs its relevant clauses
+wherever they live. Validating page 7 in isolation asks a question with no answer
+and forces a consolidation step to reconcile N partial verdicts per rule.
+
+**Grounding is deterministic.** The only stage that cannot hallucinate, which is
+why everything else is anchored to it. A quote it cannot locate is reported as
+unverified rather than quietly dropped.
+
+## Scoped retry
+
+The human gate is not approve/reject — it is *which node do I invalidate*.
+
+```bash
+curl -X POST localhost:8000/api/v1/runs/$RUN/retry \
+  -d '{"stage":"typedetect","reason":"wrong_type","config":{"document_type":"msa"}}'
+```
+
+| Reviewer sees | Stage to name | Cost |
+|---|---|---|
+| Wrong document type | `typedetect` | cents |
+| Missed a clause | `analysis` | cents |
+| Bad quote or box | `grounding` | negligible |
+| Wrong finding | `validation` | negligible |
+| Bad OCR | `ocr` | full re-OCR |
+
+OCR only re-runs when named, and even then a content-hash cache hit makes it
+free. `backend_test.py` asserts this.
 
 ## Configuration
 
-All optional; defaults shown. See `.env.example`.
+Providers are flags, resolved through factories. Adding a backend is one module
+plus one registry entry — call sites never branch.
 
-| Variable | Default | Notes |
+| Setting | Values | Default |
 |---|---|---|
-| `SUMMARIZER_MODEL` | `anthropic/claude-opus-5` | `<provider>/<model>`; no date suffix. `openai/...` also works |
-| `SUMMARIZER_JUDGE_MODEL` | `anthropic/claude-opus-5` | Separate — can be a different provider entirely |
-| `SUMMARIZER_EFFORT` | `high` | `low` \| `medium` \| `high` \| `xhigh` \| `max`; mapped per provider |
-| `SUMMARIZER_THINKING` | `1` | Anthropic adaptive thinking; ignored elsewhere |
-| `SUMMARIZER_MAX_TOKENS` | `16000` | Non-streaming default; raise with streaming |
-| `SUMMARIZER_JUDGE_THRESHOLD` | `0.75` | Below this the pipeline retries |
-| `SUMMARIZER_MAX_REPAIRS` | `2` | Judge retries, and `structured()` repair turns |
+| `OCR_PROVIDER` | `azure` \| `aws` \| `none` | `azure` |
+| `STORAGE_PROVIDER` | `local` \| `azure` \| `s3` | `local` |
+| `LLM_MODEL` | any LiteLLM id | `anthropic/claude-opus-5` |
 
-## Extending it
+Full list in `.env.example`.
 
-- **Semantic retrieval** — replace `Index` with a vector store; only `search()` is used.
-- **Clause-type coverage check** — add a deterministic pass asserting each playbook
-  category maps to at least one clause, and feed misses to the judge as an issue.
-- **Streaming** — for `max_tokens` above ~32k, switch `complete()` to `litellm.completion(..., stream=True)`
-  and accumulate; the Anthropic SDK requires streaming near the 128k output ceiling.
-- **Caching** — the system prompts and the document block are stable across the judge
-  retry loop, so a `cache_control` breakpoint after the document block pays for itself
-  from the second attempt onward.
+### Document types
 
-## Not covered
+One YAML per type in `doctypes/`, driving three things that used to be hardcoded
+in three places:
 
-- Parallel tool calls are handled in `agent_loop()` but the mocked test only exercises
-  one call per turn; verify against the real API before relying on it.
-- The OCR path needs `poppler` and `tesseract` on `PATH` and is untested here — no
-  scanned sample was available.
-- `whole_doc` mode has no character offsets, so grounding degrades to fuzzy matching
-  against whatever text the model echoes back.
+```yaml
+slug: employment_offer
+focus: [...]              # what analysis emphasises
+sections: [...]           # the segmentation taxonomy, enforced after the call
+review_checklist: [...]   # the sign-off list in review.md
+```
+
+Adding a document type is a file, not a code change. The type detector builds its
+catalogue from the same files.
+
+### Validation rules
+
+Rules are **rows in `validation_rules`**, not files. They are edited through the
+API by the people who own the policy, without a release:
+
+```bash
+curl localhost:8000/api/v1/rules?doctype=msa
+curl -X POST localhost:8000/api/v1/rules -d '{
+  "code":"LIAB-01","name":"Liability cap","doctype":"msa","severity":"high",
+  "rule":"Aggregate liability must be capped at 12 months of fees."}'
+curl -X PATCH localhost:8000/api/v1/rules/$ID -d '{"enabled":false}'
+```
+
+Scoping is by `doctype`. A rule with a doctype applies to that type only; a rule
+with `doctype = NULL` applies to every document. That is what replaced "which
+playbook file do I load" — and it is why an MSA rule can no longer silently run
+against an offer letter.
+
+`seeds/playbooks/*.yaml` are the original playbooks, kept as an import source
+only. Nothing reads them at runtime; `scripts/seed_rules.py` upserts them on
+`(doctype, code)`, so re-running updates rather than duplicating.
+
+## Layout
+
+```
+main.py                     FastAPI app, error handling, lifespan
+src/
+  api/v1/endpoints/         documents.py  runs.py  health.py
+  api/v1/models/            requests.py  responses.py
+  core/config/              settings.py, one BaseSettings per concern
+  core/errors/              exceptions with HTTP status + code
+  services/ocr/             base.py  azure_ocr.py  aws_ocr.py  factory.py
+  services/storage/         base.py  local  azure  s3  factory.py
+  services/llm/             adapter.py - LiteLLM + usage accounting
+  services/state/           store.py - run persistence
+  services/doctypes.py      per-type config
+  models/database/          SQLAlchemy models
+  repositories/             data access; nothing else touches a session
+  core/database/            engine, session, Postgres/SQLite type shims
+alembic/                    migrations
+scripts/seed_rules.py       one-way YAML -> database import
+seeds/playbooks/            the original YAML, import source only
+  pipeline/stages/          one module per stage, pure JSON in/out
+  pipeline/orchestrator.py  DAG resolution, persistence, parallel branches
+  schemas/                  stage contracts + run state
+  utils/retrieval.py        BM25, dependency-free
+```
+
+## Provider notes
+
+Three LiteLLM behaviours are handled in `services/llm/adapter.py`, each verified
+against LiteLLM's own transforms rather than assumed:
+
+- `output_config` must be a **top-level kwarg** for Anthropic. As `extra_body` it
+  is sent as a literal `extra_body` key, which Anthropic rejects; for OpenAI it is
+  not dropped but tucked into `extra_body`, which OpenAI rejects.
+- `reasoning_effort` sent to **Anthropic** is rewritten to the deprecated
+  `thinking: {type: "enabled", budget_tokens: N}` — a 400 on current models.
+- `strict` is stripped for OpenAI, whose strict mode requires every property in
+  `required`; our schemas have genuinely optional fields.
+
+Structured output forces the tool call on OpenAI and uses `auto` plus an explicit
+instruction on Anthropic, whose newest models reject forced tool choice.
+
+## Not done yet
+
+- **Workers and Redis.** Runs execute as FastAPI background tasks. Stages are
+  already pure functions of JSON, so moving them behind a queue is a transport
+  change, not a rewrite.
+- **Per-type segmentation schemas** beyond the two in `doctypes/`.
+- **No live call has been made through this backend.** Every test stubs the OCR
+  provider and the LLM transport. The Azure and Textract response parsers are
+  written against their documented shapes but have not seen a real response.
+- **No OCR fallback.** If the configured provider fails, the run fails at the
+  `ocr` stage and says so. The old model-transcription path was removed with the
+  legacy CLI; re-adding it means implementing a provider, not flipping a flag.
+- **Reviewer corrections are recorded, not used.** `retry.reason` is stored on the
+  stage record. Nothing reads it yet — but a labelled failure case cannot be
+  reconstructed after the fact.

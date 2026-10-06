@@ -1,11 +1,29 @@
-litellm>=1.63.0
-tenacity>=8.2          # required by litellm's num_retries path; not pulled in by litellm itself
+# --- API ---
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9          # multipart uploads
+
+# --- core ---
 pydantic>=2.7
+pydantic-settings>=2.4
+python-dotenv>=1.0
 pyyaml>=6.0
-python-dotenv>=1.0     # explicit .env loading; see summarizer/config.py
 pypdf>=4.2
 
-# optional OCR path (only needed for scanned PDFs; also needs tesseract + poppler on PATH)
-pytesseract>=0.3.10
-pdf2image>=1.17
-Pillow>=10.0
+# --- database (validation rules) ---
+sqlalchemy[asyncio]>=2.0
+alembic>=1.13
+aiosqlite>=0.20                  # local/dev default
+# asyncpg>=0.29                  # uncomment for Postgres
+
+# --- LLM ---
+litellm>=1.63.0
+tenacity>=8.2                    # litellm's num_retries path needs it; not pulled in by litellm
+
+# --- optional: Azure OCR + Blob storage  (pip install -r requirements-azure.txt) ---
+# azure-ai-documentintelligence>=1.0
+# azure-storage-blob>=12.20
+# azure-identity>=1.17
+
+# --- optional: AWS Textract + S3  (pip install -r requirements-aws.txt) ---
+# boto3>=1.34

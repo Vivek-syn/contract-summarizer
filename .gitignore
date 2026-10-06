@@ -1,4 +1,11 @@
 venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# secrets
 .env
-__pycache__
-out/
+.env.local
+
+# generated at runtime: uploaded PDFs, OCR cache, run state, the sqlite db
+data/

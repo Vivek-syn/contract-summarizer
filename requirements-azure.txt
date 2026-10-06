@@ -1,0 +1,4 @@
+-r requirements.txt
+azure-ai-documentintelligence>=1.0
+azure-storage-blob>=12.20
+azure-identity>=1.17
