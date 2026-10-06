@@ -13,8 +13,10 @@ pypdf>=4.2
 # --- database (validation rules) ---
 sqlalchemy[asyncio]>=2.0
 alembic>=1.13
-aiosqlite>=0.20                  # local/dev default
-# asyncpg>=0.29                  # uncomment for Postgres
+# Both async drivers ship by default: DB_URL decides which one is used, and a
+# missing driver only fails at connect time with a bare ModuleNotFoundError.
+aiosqlite>=0.20                  # sqlite+aiosqlite  (default, no server needed)
+asyncpg>=0.29                    # postgresql+asyncpg (deployment)
 
 # --- LLM ---
 litellm>=1.63.0

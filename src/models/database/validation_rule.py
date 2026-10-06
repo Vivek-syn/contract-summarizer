@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, Index, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database.base import GUID, Base, JSONType
@@ -92,9 +92,15 @@ class ValidationRule(Base):
     )
 
     # --- timestamps ------------------------------------------------------
-    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    # DateTime(timezone=True) is explicit on purpose: a bare Mapped[datetime]
+    # maps to TIMESTAMP WITHOUT TIME ZONE, and Postgres then rejects the aware
+    # datetimes utc_now() produces. SQLite accepts either, so this only shows up
+    # against a real Postgres.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        default=utc_now, onupdate=utc_now, nullable=False
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
 
     __table_args__ = (

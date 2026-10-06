@@ -20,14 +20,16 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# JSONB on Postgres, JSON elsewhere - the same shim the model uses.
+# The same type shims the model uses - a migration that declares different
+# column types than the ORM binds produces errors only on one backend.
 JSON_TYPE = postgresql.JSONB(astext_type=sa.Text()).with_variant(sa.JSON(), "sqlite")
+GUID_TYPE = postgresql.UUID(as_uuid=True).with_variant(sa.String(length=36), "sqlite")
 
 
 def upgrade() -> None:
     op.create_table(
         "validation_rules",
-        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("id", GUID_TYPE, nullable=False),
         sa.Column("code", sa.String(length=64), nullable=False),
         sa.Column("doctype", sa.String(length=64), nullable=True),
         sa.Column("group_name", sa.String(length=128), nullable=True),
